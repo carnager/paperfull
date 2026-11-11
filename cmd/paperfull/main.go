@@ -49,12 +49,16 @@ func envBool(key string, def bool) bool {
 	return def
 }
 
+// version is set at build time: go build -ldflags "-X main.version=…"
+var version = "dev"
+
 const usage = `paperfull - document archive with OCR, auto-sorting and full-text search
 
 Usage:
   paperfull [flags]            run the server (default)
   paperfull reindex [flags]    rebuild the search index
   paperfull retrain [flags]    train the classifier once and print stats
+  paperfull version            print the version
 
 Every flag can also be set with an environment variable (shown in brackets).
 
@@ -66,6 +70,10 @@ func main() {
 	args := os.Args[1:]
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		cmd, args = args[0], args[1:]
+	}
+	if cmd == "version" || cmd == "--version" {
+		fmt.Println("paperfull", version)
+		return
 	}
 
 	fs := flag.NewFlagSet("paperfull", flag.ExitOnError)
@@ -219,7 +227,7 @@ func main() {
 	if *token == "" && !strings.HasPrefix(*listen, "127.") && !strings.HasPrefix(*listen, "localhost") {
 		log.Warn("no -token set and listening on a non-local address: anyone on the network can read your documents")
 	}
-	log.Info("paperfull running", "url", "http://"+*listen, "data", *dataDir, "ocr", *lang, "psm", *psm)
+	log.Info("paperfull running", "version", version, "url", "http://"+*listen, "data", *dataDir, "ocr", *lang, "psm", *psm)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		fatal(log, "http server", err)
 	}

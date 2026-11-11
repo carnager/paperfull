@@ -1,0 +1,21 @@
+post_install() {
+  cat <<'MSG'
+==> paperfull: start it as your user (recommended on a desktop):
+      systemctl --user enable --now paperfull
+    Open http://127.0.0.1:8484. Scans saved to ~/Scans/inbox are picked up,
+    data lives in ~/.local/share/paperfull. Settings: ~/.config/paperfull.env
+    (see /etc/paperfull.env for the options).
+
+    Or as a system service (data and inbox in /var/lib/paperfull):
+      sudo systemctl enable --now paperfull
+    Settings: /etc/paperfull.env. Set PAPERFULL_TOKEN before listening on
+    anything but localhost.
+
+    Optional: libreoffice for office file previews, ollama for AI suggestions.
+MSG
+}
+
+post_upgrade() {
+  systemctl try-restart paperfull.service >/dev/null 2>&1 || true
+  echo "==> Restart user instances yourself: systemctl --user restart paperfull"
+}

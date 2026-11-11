@@ -1,0 +1,57 @@
+# Maintainer: Rasi <rasi@xssn.at>
+
+# Built from the git repository (set PAPERFULL_SRC to build a local checkout), so the version follows the commits.
+pkgname=paperfull-git
+pkgver=r0
+pkgrel=1
+pkgdesc='Lightweight document archive with OCR, auto-sorting and full-text search (a lean paperless-ngx)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/carnager/paperfull'
+license=('LicenseRef-unknown')
+depends=('glibc' 'tesseract' 'tesseract-data-deu' 'tesseract-data-eng' 'tesseract-data-osd' 'poppler')
+makedepends=('go>=2:1.27' 'git')
+optdepends=('libreoffice: PDF previews of Word, Excel and PowerPoint files'
+            'ollama: AI suggestions for sender, type and title')
+provides=('paperfull')
+conflicts=('paperfull')
+backup=('etc/paperfull.env')
+install=paperfull.install
+source=("paperfull::git+${PAPERFULL_SRC:-https://github.com/carnager/paperfull.git}")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd paperfull
+  printf 'r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd paperfull
+  export GOPATH="$srcdir/gopath"
+  go mod download
+}
+
+build() {
+  cd paperfull
+  export GOPATH="$srcdir/gopath"
+  export CGO_ENABLED=0
+  export GOFLAGS='-buildmode=pie -trimpath -mod=readonly -modcacherw'
+  go build -ldflags "-X main.version=$pkgver" -o paperfull ./cmd/paperfull
+}
+
+check() {
+  cd paperfull
+  export GOPATH="$srcdir/gopath"
+  export CGO_ENABLED=0
+  go test ./...
+}
+
+package() {
+  cd paperfull
+  install -Dm755 paperfull "$pkgdir/usr/bin/paperfull"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 -t "$pkgdir/usr/share/doc/$pkgname/samples" samples/*
+  install -Dm644 packaging/arch/paperfull.service "$pkgdir/usr/lib/systemd/system/paperfull.service"
+  install -Dm644 packaging/arch/paperfull.user.service "$pkgdir/usr/lib/systemd/user/paperfull.service"
+  install -Dm644 packaging/arch/paperfull.sysusers "$pkgdir/usr/lib/sysusers.d/paperfull.conf"
+  install -Dm600 packaging/arch/paperfull.env "$pkgdir/etc/paperfull.env"
+}

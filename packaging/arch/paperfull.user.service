@@ -1,16 +1,18 @@
-# Install as ~/.config/systemd/user/paperfull.service, then:
-#   systemctl --user daemon-reload && systemctl --user enable --now paperfull
 [Unit]
 Description=paperfull document archive
-After=network.target
+Documentation=file:///usr/share/doc/paperfull-git/README.md
+Wants=network-online.target
+After=network-online.target
 
 [Service]
-ExecStart=%h/.local/bin/paperfull
 Environment=PAPERFULL_DATA=%h/.local/share/paperfull
 Environment=PAPERFULL_CONSUME=%h/Scans/inbox
 Environment=PAPERFULL_LISTEN=127.0.0.1:8484
-# Environment=PAPERFULL_TOKEN=change-me
+EnvironmentFile=-%E/paperfull.env
+ExecStart=/usr/bin/paperfull
+WorkingDirectory=%h
 Restart=on-failure
+RestartSec=2
 Nice=5
 
 [Install]

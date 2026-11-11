@@ -1,0 +1,47 @@
+[Unit]
+Description=paperfull document archive
+Documentation=file:///usr/share/doc/paperfull-git/README.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Environment=PAPERFULL_DATA=/var/lib/paperfull
+Environment=PAPERFULL_CONSUME=/var/lib/paperfull/inbox
+Environment=PAPERFULL_LISTEN=127.0.0.1:8484
+EnvironmentFile=-/etc/paperfull.env
+ExecStart=/usr/bin/paperfull
+User=paperfull
+Group=paperfull
+StateDirectory=paperfull
+StateDirectoryMode=0750
+WorkingDirectory=/var/lib/paperfull
+Restart=on-failure
+RestartSec=5
+Nice=5
+
+# Hardening. No MemoryDenyWriteExecute or SystemCallFilter: LibreOffice,
+# which converts office files, needs executable memory and more syscalls.
+# To watch a folder outside /var/lib/paperfull, add it with
+#   systemctl edit paperfull   ->   [Service] ReadWritePaths=/srv/scans
+CapabilityBoundingSet=
+LockPersonality=true
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectProc=invisible
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

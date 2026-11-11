@@ -52,6 +52,21 @@ apt install tesseract-ocr tesseract-ocr-deu tesseract-ocr-osd poppler-utils
 brew install tesseract tesseract-lang poppler
 ```
 
+## On Arch Linux
+
+There's a package in the [mooned repository](https://repo.mooned.de):
+
+```sh
+sudo pacman -S paperfull-git
+systemctl --user enable --now paperfull
+```
+
+That runs it as your user, with data in `~/.local/share/paperfull` and
+`~/Scans/inbox` as the watched folder. Settings go in
+`~/.config/paperfull.env`; `/etc/paperfull.env` lists them. There's also a
+system service (`sudo systemctl enable --now paperfull`) with everything in
+`/var/lib/paperfull`.
+
 ## Running it
 
 ```sh
@@ -71,8 +86,8 @@ reach it from other machines, set a password:
 ./paperfull -listen 0.0.0.0:8484 -token 'something long'
 ```
 
-`contrib/paperfull.service` is a systemd user unit if you want it running
-in the background.
+`packaging/arch/` has systemd units for running it in the background, as
+your user or as a system service.
 
 ## Options
 
