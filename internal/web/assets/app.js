@@ -246,14 +246,25 @@
     done: 'Added to your inbox',
     duplicate: 'Already in your archive',
     failed: 'Could not be added',
+    password: 'Needs a password',
   };
   function setRow(li, state, text, docId) {
-    li.className = state === 'done' || state === 'duplicate' ? 'done' : state === 'failed' ? 'failed' : '';
+    li.className = state === 'done' || state === 'duplicate' ? 'done' : state === 'failed' ? 'failed' : state === 'password' ? 'locked' : '';
     const busy = !li.className;
+    const ic = { failed: 'x', locked: 'lock' }[li.className] || 'check';
     li.querySelector('.u-lead').outerHTML = busy ? '<span class="spinner u-lead"></span>'
-      : `<svg class="i u-icon u-lead"><use href="#i-${state === 'failed' ? 'x' : 'check'}"/></svg>`;
+      : `<svg class="i u-icon u-lead"><use href="#i-${ic}"/></svg>`;
     li.querySelector('.u-state').textContent = text;
-    li.querySelector('.u-link').innerHTML = docId ? `<a href="/documents/${docId}">Open</a>` : '';
+    const link = li.querySelector('.u-link');
+    link.innerHTML = docId ? `<a href="/documents/${docId}">Open</a>` : '';
+    if (state === 'password') {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = 'Unlock';
+      b.dataset.unlock = li.dataset.task;
+      b.dataset.file = li.dataset.file;
+      link.append(b);
+    }
   }
   async function upload(files) {
     files = [...files];
@@ -262,6 +273,7 @@
     $('#uploads-title').textContent = 'Adding documents';
     for (const f of files) {
       const li = document.createElement('li');
+      li.dataset.file = f.name;
       li.innerHTML = `<span class="spinner u-lead"></span><span class="u-main"><span class="u-name">${esc(f.name)}</span><span class="u-state">Uploading…</span></span><span class="u-link"></span>`;
       plist.prepend(li);
       pending++;
@@ -276,6 +288,7 @@
       const body = await r.json();
       if (!r.ok) throw new Error(body.error || r.statusText);
       myTasks.add(body.id);
+      li.dataset.task = body.id;
       setRow(li, body.status, states[body.status]);
       poll(body.id, li);
     } catch (err) {
@@ -291,6 +304,7 @@
       if (t.status === 'queued' || t.status === 'processing') { setRow(li, t.status, states[t.status]); continue; }
       const text = t.status === 'failed' ? (t.error || states.failed).replace(/^unsupported file type.*/, "This file type isn't supported") : states[t.status];
       setRow(li, t.status, text, t.document_id);
+      if (t.status === 'password') askPassword(t);
       finished();
       return;
     }
@@ -550,15 +564,106 @@
     }, 350);
   }
   function onTask(t) {
-    if (onActivity) {
-      clearTimeout(reloadTimer);
-      reloadTimer = setTimeout(() => location.reload(), 300);
-    }
+    if (onActivity) scheduleReload();
+    if (t.status === 'password') askPassword(t);
+    if (t.status === 'unlocked' || t.status === 'discarded') forgetLocked(t.id);
     if (t.source !== 'folder' || myTasks.has(t.id)) return;
     if (t.status === 'done') toast(`New in your inbox: ${t.file}`, `/documents/${t.document_id}`, 'new');
     else if (t.status === 'duplicate') toast(`${t.file} is already in your archive`, `/documents/${t.document_id}`);
     else if (t.status === 'failed') toast(`Couldn't add ${t.file}`, '/activity', 'error');
   }
+  function scheduleReload() {
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => {
+      // Never reload under someone typing a password or confirming something.
+      if ($('dialog[open]')) scheduleReload();
+      else location.reload();
+    }, 300);
+  }
+
+  // ---------- locked PDFs ----------
+  const unlockDlg = $('#unlock');
+  const lockedQueue = [];
+  let lockedNow = null;
+  const skippedKey = 'pf-skipped-locked';
+  const skipped = () => { try { return JSON.parse(sessionStorage.getItem(skippedKey) || '[]'); } catch { return []; } };
+  const skip = id => { try { sessionStorage.setItem(skippedKey, JSON.stringify([...skipped(), id])); } catch {} };
+
+  function askPassword(t, force) {
+    if (!unlockDlg || (!force && skipped().includes(t.id))) return;
+    if (lockedNow?.id === t.id || lockedQueue.some(x => x.id === t.id)) return;
+    lockedQueue.push({ id: t.id, file: t.file });
+    showNextLocked();
+  }
+  function showNextLocked() {
+    if (lockedNow || !lockedQueue.length || $('dialog[open]')) return;
+    lockedNow = lockedQueue.shift();
+    $('#unlock-file').textContent = lockedNow.file;
+    $('#unlock-error').hidden = true;
+    $('#unlock-password').value = '';
+    unlockDlg.showModal();
+    $('#unlock-password').focus();
+  }
+  function closeLocked() {
+    lockedNow = null;
+    if (unlockDlg.open) unlockDlg.close();
+    setTimeout(showNextLocked, 150);
+  }
+  function forgetLocked(id) {
+    const i = lockedQueue.findIndex(x => x.id === id);
+    if (i >= 0) lockedQueue.splice(i, 1);
+    if (lockedNow?.id === id) closeLocked();
+  }
+  if (unlockDlg) {
+    $('#unlock-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!lockedNow) return;
+      const cur = lockedNow, ok = $('#unlock-ok');
+      ok.disabled = true;
+      try {
+        const r = await fetch(`/api/tasks/${cur.id}/unlock`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: $('#unlock-password').value }),
+        });
+        const body = await r.json();
+        if (!r.ok) {
+          $('#unlock-error').textContent = body.error || r.statusText;
+          $('#unlock-error').hidden = false;
+          $('#unlock-password').select();
+          return;
+        }
+        myTasks.add(body.id);
+        // Keep following it in the upload panel if it was uploaded here.
+        const li = $(`#uploads-list li[data-task="${cur.id}"]`);
+        if (li) { li.dataset.task = body.id; pending++; setRow(li, 'queued', 'Unlocked, reading the text…'); poll(body.id, li); }
+        else toast(`Unlocked “${cur.file}”, it shows up in your inbox in a moment.`);
+        closeLocked();
+      } catch (err) {
+        $('#unlock-error').textContent = String(err.message || err);
+        $('#unlock-error').hidden = false;
+      } finally {
+        ok.disabled = false;
+      }
+    });
+    $('#unlock-later').addEventListener('click', () => { if (lockedNow) skip(lockedNow.id); closeLocked(); });
+    $('#unlock-discard').addEventListener('click', async () => {
+      if (!lockedNow) return;
+      const cur = lockedNow;
+      await fetch(`/api/tasks/${cur.id}`, { method: 'DELETE' });
+      toast(`Discarded “${cur.file}”`);
+      closeLocked();
+    });
+    unlockDlg.addEventListener('cancel', () => { if (lockedNow) skip(lockedNow.id); lockedNow = null; setTimeout(showNextLocked, 150); });
+    document.addEventListener('click', e => {
+      const b = e.target.closest('[data-unlock]');
+      if (b) askPassword({ id: b.dataset.unlock, file: b.dataset.file }, true);
+    });
+    // Ask about PDFs that got locked while this page wasn't open.
+    if (!document.body.classList.contains('center')) {
+      fetch('/api/tasks').then(r => r.ok ? r.json() : []).then(ts => ts.filter(t => t.status === 'password').reverse().forEach(t => askPassword(t))).catch(() => {});
+    }
+  }
+
   document.addEventListener('toggle', e => {
     if (e.newState === 'closed' && pendingRefresh && !document.body.classList.contains('selecting')) refreshNow();
   }, true);

@@ -281,9 +281,11 @@ func (m *model) finalize() {
 	}
 	m.idf = make([]float32, len(m.vocab))
 	for i, d := range df {
-		// A word in every document (like your own name and address) gets
-		// weight 0, so it can't make unrelated letters look alike.
-		m.idf[i] = float32(math.Log(float64(m.n+1) / float64(d+1)))
+		// Words in nearly every document (like your own name and address)
+		// get a small weight, rare words a large one, so letters don't look
+		// alike just because they're addressed to you. Not zero: in a small
+		// archive from one sender, every word is "in every document".
+		m.idf[i] = float32(math.Log(float64(m.n+1)/float64(d+1)) + 0.25)
 	}
 	m.postings = make([][]posting, len(m.vocab))
 	for d, ids := range m.pending {

@@ -225,6 +225,9 @@ func hasTextLayer(text string, pages int) bool {
 }
 
 func processPDF(ctx context.Context, cfg Config, src, workdir string) (*Result, error) {
+	if NeedsPassword(ctx, src) {
+		return nil, ErrPasswordRequired
+	}
 	pages, err := pdfPages(ctx, src)
 	if err != nil {
 		return nil, err

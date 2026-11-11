@@ -15,6 +15,7 @@
         <span class="task-name">{{.File}}</span>
         <span class="task-sub">{{statusText .Status}} · {{ago .Queued}}{{if eq .Status "failed"}} · {{.Error}}{{end}}</span>
       </div>
+      {{if eq .Status "password"}}<button class="btn small primary" type="button" data-unlock="{{.ID}}" data-file="{{.File}}">Unlock</button>{{end}}
       {{if .DocumentID}}<a class="btn small" href="/documents/{{.DocumentID}}">Open</a>{{end}}
     </li>
     {{end}}

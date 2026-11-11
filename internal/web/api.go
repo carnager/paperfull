@@ -751,3 +751,34 @@ func (s *Server) apiAISuggest(w http.ResponseWriter, r *http.Request) {
 		"sender_exists": sid != nil, "type_exists": tid != nil,
 	})
 }
+
+// apiUnlock decrypts a PDF that is waiting for its password.
+func (s *Server) apiUnlock(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	t, err := s.Ingester.Unlock(r.Context(), r.PathValue("id"), body.Password)
+	switch {
+	case errors.Is(err, ocr.ErrWrongPassword):
+		writeError(w, http.StatusForbidden, "That password doesn't open this PDF.")
+	case errors.Is(err, ingest.ErrNotLocked):
+		writeError(w, http.StatusConflict, err.Error())
+	case err != nil:
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
+	default:
+		writeJSON(w, http.StatusOK, t)
+	}
+}
+
+// apiDiscardTask drops a PDF that is waiting for its password.
+func (s *Server) apiDiscardTask(w http.ResponseWriter, r *http.Request) {
+	if err := s.Ingester.Discard(r.PathValue("id")); err != nil {
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

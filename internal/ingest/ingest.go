@@ -64,6 +64,7 @@ type Task struct {
 	Finished   *time.Time `json:"finished,omitempty"`
 
 	path       string
+	checksum   string // set for locked PDFs, to spot the same file twice
 	opts       Options
 	reprocess  int64
 	onFinished func(Task)
@@ -88,16 +89,18 @@ type Ingester struct {
 }
 
 func New(cfg Config, s *store.Store, cls *classify.Classifier, log *slog.Logger) (*Ingester, error) {
-	for _, d := range []string{"originals", "archive", "thumbs", "tmp"} {
+	for _, d := range []string{"originals", "archive", "thumbs", "tmp", "locked"} {
 		if err := os.MkdirAll(filepath.Join(cfg.DataDir, d), 0o755); err != nil {
 			return nil, err
 		}
 	}
-	return &Ingester{
+	in := &Ingester{
 		cfg: cfg, store: s, cls: cls, log: log,
 		queue: make(chan *Task, 10000),
 		tasks: map[string]*Task{},
-	}, nil
+	}
+	in.restoreLocked()
+	return in, nil
 }
 
 func (in *Ingester) OriginalsDir() string { return filepath.Join(in.cfg.DataDir, "originals") }
@@ -240,6 +243,9 @@ func (in *Ingester) runTask(ctx context.Context, t *Task) {
 	}
 	var dup *DuplicateError
 	switch {
+	case errors.As(err, &LockedError{}):
+		in.setStatus(t, StatusPassword, err, 0)
+		in.log.Warn("PDF needs a password, waiting", "file", t.File)
 	case errors.As(err, &dup):
 		in.setStatus(t, StatusDuplicate, err, dup.ExistingID)
 		in.log.Warn("duplicate skipped", "file", t.File, "existing", dup.ExistingID)
@@ -300,6 +306,9 @@ func (in *Ingester) consume(ctx context.Context, t *Task) (int64, error) {
 	defer os.RemoveAll(work)
 
 	res, err := ocr.Process(ctx, in.cfg.OCR, t.path, work)
+	if errors.Is(err, ocr.ErrPasswordRequired) {
+		return 0, in.park(t, sum)
+	}
 	if err != nil {
 		return 0, err
 	}

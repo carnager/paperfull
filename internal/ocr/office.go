@@ -259,7 +259,8 @@ func ExtractOffice(p, mime string) (string, int, error) {
 	default:
 		return "", 0, fmt.Errorf("%w: %s", ErrUnsupported, mime)
 	}
-	return CleanText(b.String()), pages, nil
+	// Paragraphs inside table cells end with a space; drop it before the tab.
+	return CleanText(strings.ReplaceAll(b.String(), " \t", "\t")), pages, nil
 }
 
 func docxPages(f *zip.File) int {

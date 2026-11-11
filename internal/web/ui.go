@@ -83,6 +83,12 @@ var funcs = template.FuncMap{
 			return "Already in your archive"
 		case "failed":
 			return "Couldn't be added"
+		case "password":
+			return "Needs a password"
+		case "unlocked":
+			return "Unlocked"
+		case "discarded":
+			return "Discarded"
 		}
 		return s
 	},
@@ -186,11 +192,12 @@ type Base struct {
 	Auth       bool
 	InboxCount int
 	Total      int
+	Locked     int // PDFs waiting for a password
 }
 
 func (s *Server) base(ctx context.Context, title, active string) Base {
 	st, _ := s.Store.Stats(ctx)
-	return Base{Title: title, Active: active, Auth: s.Token != "", InboxCount: st.Inbox, Total: st.Documents}
+	return Base{Title: title, Active: active, Auth: s.Token != "", InboxCount: st.Inbox, Total: st.Documents, Locked: s.Ingester.LockedCount()}
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data any) {

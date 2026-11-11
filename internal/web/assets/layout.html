@@ -29,7 +29,7 @@
     </nav>
     <div class="grow"></div>
     <nav class="nav subtle">
-      <a href="/activity" class="{{if eq .Active "activity"}}on{{end}}"><svg class="i"><use href="#i-activity"/></svg><span>Activity</span></a>
+      <a href="/activity" class="{{if eq .Active "activity"}}on{{end}}"><svg class="i"><use href="#i-activity"/></svg><span>Activity</span>{{if .Locked}}<span class="count hot" title="Waiting for a password">{{.Locked}}</span>{{end}}</a>
       {{if .Auth}}<form method="post" action="/logout"><button class="navbtn"><svg class="i"><use href="#i-logout"/></svg><span>Sign out</span></button></form>{{end}}
     </nav>
   </aside>
@@ -54,6 +54,19 @@
   <ul id="uploads-list"></ul>
 </section>
 <div id="toasts" aria-live="polite"></div>
+<dialog id="unlock" class="modal small">
+  <form method="dialog" id="unlock-form">
+    <h2>This PDF is locked</h2>
+    <p><b id="unlock-file"></b> is protected with a password. Enter it to add the document. paperfull keeps an unlocked copy, so you won't be asked again.</p>
+    <label class="field"><span>Password</span><input type="password" id="unlock-password" autocomplete="off" required></label>
+    <p class="formerror" id="unlock-error" hidden></p>
+    <div class="modal-actions">
+      <button class="btn ghost danger left" type="button" id="unlock-discard">Discard</button>
+      <button class="btn" type="button" id="unlock-later">Later</button>
+      <button class="btn primary" id="unlock-ok">Unlock</button>
+    </div>
+  </form>
+</dialog>
 <dialog id="confirm" class="modal small">
   <form method="dialog">
     <h2 id="confirm-title">Are you sure?</h2>
@@ -95,6 +108,7 @@
 <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
 <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5"/></symbol>
 <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l.9 12.2a1.5 1.5 0 0 0 1.5 1.3h6.2a1.5 1.5 0 0 0 1.5-1.3L17.5 7"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9.5" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
 <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></symbol>
 </defs>
 </svg>{{end}}

@@ -201,7 +201,8 @@ func (w *Watcher) submit(path string) {
 			delete(w.inflight, path)
 			w.mu.Unlock()
 		}()
-		if t.Status == ingest.StatusDone {
+		// A locked PDF is kept safe in the data folder until it's unlocked.
+		if t.Status == ingest.StatusDone || t.Status == ingest.StatusPassword {
 			if err := os.Remove(path); err != nil {
 				w.Log.Warn("removing consumed file", "file", path, "err", err)
 			}

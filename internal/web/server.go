@@ -60,6 +60,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/documents/{id}/ai", s.apiAISuggest)
 	mux.HandleFunc("GET /api/tasks", s.apiTasks)
 	mux.HandleFunc("GET /api/tasks/{id}", s.apiTask)
+	mux.HandleFunc("POST /api/tasks/{id}/unlock", s.apiUnlock)
+	mux.HandleFunc("DELETE /api/tasks/{id}", s.apiDiscardTask)
 	mux.HandleFunc("GET /api/stats", s.apiStats)
 	mux.HandleFunc("POST /api/retrain", s.apiRetrain)
 	mux.HandleFunc("GET /api/{kind}", s.apiListEntities)

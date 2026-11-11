@@ -119,6 +119,17 @@ archive) go to `.failed/` with a short note explaining why.
 Sub-folder names become tags. Scanning into `inbox/Steuer/` tags the
 document "Steuer". Turn that off with `-consume-subdir-tags=false`.
 
+## Password-protected PDFs
+
+Bank statements and payslips often need a password to open. paperfull
+notices, keeps the file aside and asks you for the password, either right
+away in a dialog or later from the Activity page. Once unlocked, the
+document is stored without the password, so you're never asked again.
+PDFs that only block printing or editing are added without asking.
+
+Locked files wait in `data/locked/` and survive restarts until you unlock
+or discard them.
+
 ## How sorting works
 
 Each sender, type and tag has a setting for when it's assigned on its own:
@@ -201,6 +212,8 @@ curl -H "Authorization: Bearer $TOKEN" \
 | `POST /api/documents/{id}/reprocess` | read the document again |
 | `POST /api/documents/{id}/ai` | ask the AI, without saving |
 | `GET /api/tasks`, `/api/tasks/{id}` | processing status |
+| `POST /api/tasks/{id}/unlock` | `{"password": "…"}` for a locked PDF |
+| `DELETE /api/tasks/{id}` | discard a locked PDF |
 | `GET /api/events` | live updates (server-sent events) |
 | `GET`, `POST /api/tags`, `/api/correspondents`, `/api/document_types` | list, create |
 | `GET`, `PATCH`, `DELETE /api/{kind}/{id}` | one tag, sender or type |
@@ -216,6 +229,7 @@ data/
   paperfull.db      sorting, text and search index
   originals/        your files, as uploaded
   archive/          searchable PDFs paperfull made
+  locked/           password-protected PDFs waiting for their password
   thumbs/
 ```
 
@@ -226,4 +240,13 @@ run `paperfull reindex` to rebuild the search index.
 
 - Multiple users. There's one login.
 - Email import.
-- Password-protected PDFs end up in `.failed/`.
+
+## Development
+
+```sh
+go test ./...
+```
+
+The tests don't need Ollama: they use a fake model server. Tests that
+need tesseract, poppler or LibreOffice skip themselves when those aren't
+installed.
