@@ -1,0 +1,94 @@
+{{define "organize"}}{{template "top" .Base}}
+<main class="page narrow">
+  <div class="pagehead">
+    <div>
+      <h1>{{kindLabel .Kind}}</h1>
+      <p class="sub">
+        {{if eq .Kind "correspondents"}}Who your documents come from: your bank, insurer, employer…
+        {{else if eq .Kind "document_types"}}What kind of document it is: invoice, contract, payslip…
+        {{else}}Free labels for anything else: a project, a year, “tax”, “warranty”…{{end}}
+      </p>
+    </div>
+    <button class="btn primary" type="button" data-open="dlg-new"><svg class="i"><use href="#i-plus"/></svg>New {{kindOne .Kind}}</button>
+  </div>
+  {{if .Err}}<div class="alert">{{.Err}}</div>{{end}}
+
+  {{if .Entities}}
+  {{if gt (len .Entities) 8}}
+  <div class="searchbar small"><svg class="i"><use href="#i-search"/></svg><input type="search" placeholder="Find {{kindOne .Kind}}…" data-filter-list="#entlist" autocomplete="off"></div>
+  {{end}}
+  <ul class="entlist" id="entlist">
+    {{range .Entities}}
+    <li data-name="{{.Name}}">
+      <button class="ent" type="button" data-open="dlg-{{.ID}}">
+        {{if eq $.Kind "tags"}}<i class="dot big" style="{{tagStyle .Color}}"></i>{{end}}
+        <span class="ent-main">
+          <span class="ent-name">{{.Name}}</span>
+          <span class="ent-rule">{{if eq .Algorithm "auto"}}<svg class="i"><use href="#i-sparkle"/></svg>{{end}}{{algoSummary .}}</span>
+        </span>
+      </button>
+      <a class="ent-count" href="{{listURL "/" (withF "" $.FilterKey .Name) "" 1}}">{{plural .DocCount "document" "documents"}}</a>
+    </li>
+    {{end}}
+  </ul>
+  {{else}}
+  <div class="empty">
+    <div class="empty-icon"><svg class="i"><use href="#i-{{if eq .Kind "tags"}}tag{{else if eq .Kind "correspondents"}}user{{else}}folder{{end}}"/></svg></div>
+    <h2>No {{kindOne .Kind}}s yet</h2>
+    <p>The easiest way: type one while reviewing a document, it's created on the spot. Or add one here.</p>
+  </div>
+  {{end}}
+</main>
+
+<dialog class="modal" id="dlg-new">
+  <form method="post" action="/organize/{{.Kind}}">
+    <h2>New {{kindOne .Kind}}</h2>
+    {{template "entfields" dict "E" nil "Kind" .Kind}}
+  </form>
+</dialog>
+{{range .Entities}}
+<dialog class="modal" id="dlg-{{.ID}}">
+  <form method="post" action="/organize/{{$.Kind}}/{{.ID}}">
+    <h2>Edit {{kindOne $.Kind}}</h2>
+    {{template "entfields" dict "E" . "Kind" $.Kind}}
+  </form>
+</dialog>
+{{end}}
+{{template "bottom"}}{{end}}
+
+{{define "entfields"}}
+{{$e := .E}}
+<label class="field"><span>Name</span><input name="name" value="{{if $e}}{{$e.Name}}{{end}}" required autocomplete="off"></label>
+{{if eq .Kind "tags"}}
+<div class="field">
+  <span>Color</span>
+  <div class="swatches">
+    {{$c := ""}}{{if $e}}{{$c = $e.Color}}{{end}}
+    <label class="swatch none" title="No color"><input type="radio" name="color" value="" {{if not $c}}checked{{end}}><span></span></label>
+    {{range swatches}}<label class="swatch" style="{{tagStyle .}}"><input type="radio" name="color" value="{{.}}" {{if eq . $c}}checked{{end}}><span></span></label>{{end}}
+  </div>
+</div>
+{{end}}
+<label class="field">
+  <span>Assign automatically</span>
+  <select name="algorithm" data-algo>
+    {{$a := "auto"}}{{if $e}}{{$a = $e.Algorithm}}{{end}}
+    {{range algos}}<option value="{{.}}" {{if eq . $a}}selected{{end}}>{{algoLabel .}}</option>{{end}}
+  </select>
+</label>
+<p class="hint" data-hint-for="auto">New documents that look like ones you've already given this {{kindOne .Kind}} get it too. Nothing else to set up.</p>
+<div class="field" data-match>
+  <span data-match-label>Words</span>
+  <input name="match" value="{{if $e}}{{$e.Match}}{{end}}" autocomplete="off" spellcheck="false">
+  <p class="hint" data-hint-for="any">Separate words with spaces. Use "quotes" for a phrase.</p>
+  <p class="hint" data-hint-for="all">Every one of these words has to appear. Use "quotes" for a phrase.</p>
+  <p class="hint" data-hint-for="literal">The exact text, e.g. a customer number.</p>
+  <p class="hint" data-hint-for="regex">For experts, e.g. <code>Policy\s+No\.\s*\d+</code></p>
+  <label class="check"><input type="checkbox" name="case_sensitive" value="1" {{if $e}}{{if $e.CaseSensitive}}checked{{end}}{{end}}> Upper and lower case must match</label>
+</div>
+<div class="modal-actions">
+  {{if $e}}<button class="btn ghost danger left" formaction="/organize/{{.Kind}}/{{$e.ID}}/delete" formnovalidate data-confirm-title="Delete “{{$e.Name}}”?" data-confirm="Documents stay in your archive, they just lose this {{kindOne .Kind}}."><svg class="i"><use href="#i-trash"/></svg>Delete</button>{{end}}
+  <button class="btn" type="button" data-close>Cancel</button>
+  <button class="btn primary">{{if $e}}Save{{else}}Create{{end}}</button>
+</div>
+{{end}}

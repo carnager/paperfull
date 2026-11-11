@@ -1,0 +1,198 @@
+{{define "list"}}{{template "top" .Base}}
+<main class="page">
+  <div class="pagehead">
+    <div>
+      <h1>{{if .Inbox}}Inbox{{else}}All documents{{end}}</h1>
+      <p class="sub">
+        {{if .Inbox}}{{if .Res.Total}}New documents, already sorted for you. Check them and press <b>Done</b>.{{else}}Nothing new to check.{{end}}
+        {{else}}{{if .Total}}Everything in your archive. Search finds text inside the documents too.{{else}}Your archive lives here.{{end}}{{end}}
+      </p>
+    </div>
+    {{if and .Inbox .FirstInbox}}<a class="btn primary" href="/documents/{{.FirstInbox}}">Start reviewing<svg class="i flip"><use href="#i-left"/></svg></a>{{end}}
+  </div>
+
+  {{if or .Total .Q}}
+  <form class="searchbar" id="searchform" action="{{.Path}}" method="get" role="search">
+    <svg class="i"><use href="#i-search"/></svg>
+    <input type="search" name="text" id="search" value="{{.Text}}" placeholder="Search for words, names, amounts…" autocomplete="off" spellcheck="false" aria-label="Search">
+    {{range .Raws}}<input type="hidden" name="f" value="{{.}}">{{end}}
+    {{if .Sort}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
+    <kbd title="Press / to search">/</kbd>
+  </form>
+
+  {{end}}
+  <div id="listview">{{template "listview" .}}</div>
+  {{template "datalists" .Entities}}
+</main>
+{{template "bottom"}}{{end}}
+
+{{define "listview"}}
+{{if or .Total .Q}}
+  <div class="toolbar">
+    <div class="filters">
+      <button class="fbtn" type="button" popovertarget="pop-from"><svg class="i"><use href="#i-user"/></svg>Sender<svg class="i chev"><use href="#i-chev"/></svg></button>
+      <button class="fbtn" type="button" popovertarget="pop-type"><svg class="i"><use href="#i-folder"/></svg>Type<svg class="i chev"><use href="#i-chev"/></svg></button>
+      <button class="fbtn" type="button" popovertarget="pop-tag"><svg class="i"><use href="#i-tag"/></svg>Tag<svg class="i chev"><use href="#i-chev"/></svg></button>
+      <button class="fbtn" type="button" popovertarget="pop-date"><svg class="i"><use href="#i-calendar"/></svg>Date<svg class="i chev"><use href="#i-chev"/></svg></button>
+      {{range .Chips}}<a class="chip" href="{{listURL $.Path .Remove $.Sort 1}}" title="Remove this filter">{{.Label}}{{with .Value}} <b>{{.}}</b>{{end}}<svg class="i"><use href="#i-x"/></svg></a>{{end}}
+      {{if .Q}}<a class="clearall" href="{{listURL .Path "" .Sort 1}}">Clear all</a>{{end}}
+    </div>
+    <div class="viewopts">
+      <button class="fbtn plain" type="button" popovertarget="pop-sort"><svg class="i"><use href="#i-sort"/></svg><span>{{if eq .Sort "created"}}Oldest first{{else if eq .Sort "-added"}}Recently added{{else if eq .Sort "title"}}Title{{else if and (eq .Sort "") .Text}}Best match{{else}}Newest first{{end}}</span></button>
+      <div class="seg" role="group" aria-label="Layout">
+        <button type="button" data-view="grid" title="Grid" aria-label="Grid"><svg class="i"><use href="#i-grid"/></svg></button>
+        <button type="button" data-view="list" title="List" aria-label="List"><svg class="i"><use href="#i-list"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="pop-from" popover class="menu">
+    {{if gt (len .Corrs) 7}}<input class="menu-find" placeholder="Find a sender…" autocomplete="off">{{end}}
+    <div class="menu-items">
+      {{range .Corrs}}<a href="{{listURL $.Path (withF $.Q "from" .Name) $.Sort 1}}"><span>{{.Name}}</span><small>{{.DocCount}}</small></a>
+      {{else}}<p class="menu-empty">No senders yet. You add them while reviewing documents.</p>{{end}}
+      {{if .Corrs}}<hr><a href="{{listURL $.Path (withF $.Q "from" "none") $.Sort 1}}" class="muted"><span>Without sender</span></a>{{end}}
+    </div>
+  </div>
+  <div id="pop-type" popover class="menu">
+    {{if gt (len .Types) 7}}<input class="menu-find" placeholder="Find a type…" autocomplete="off">{{end}}
+    <div class="menu-items">
+      {{range .Types}}<a href="{{listURL $.Path (withF $.Q "type" .Name) $.Sort 1}}"><span>{{.Name}}</span><small>{{.DocCount}}</small></a>
+      {{else}}<p class="menu-empty">No types yet, e.g. Invoice, Contract or Letter.</p>{{end}}
+      {{if .Types}}<hr><a href="{{listURL $.Path (withF $.Q "type" "none") $.Sort 1}}" class="muted"><span>Without type</span></a>{{end}}
+    </div>
+  </div>
+  <div id="pop-tag" popover class="menu">
+    {{if gt (len .Tags) 7}}<input class="menu-find" placeholder="Find a tag…" autocomplete="off">{{end}}
+    <div class="menu-items">
+      {{range .Tags}}<a href="{{listURL $.Path (withF $.Q "tag" .Name) $.Sort 1}}"><span><i class="dot" style="{{tagStyle .Color}}"></i>{{.Name}}</span><small>{{.DocCount}}</small></a>
+      {{else}}<p class="menu-empty">No tags yet.</p>{{end}}
+      {{if .Tags}}<hr><a href="{{listURL $.Path (withF $.Q "tag" "none") $.Sort 1}}" class="muted"><span>Without tags</span></a>{{end}}
+    </div>
+  </div>
+  <div id="pop-date" popover class="menu">
+    <div class="menu-items">
+      {{range .Years}}<a href="{{listURL $.Path (withF $.Q "year" .Year) $.Sort 1}}"><span>{{.Year}}</span><small>{{.Count}}</small></a>{{end}}
+    </div>
+    <form class="daterange" action="{{.Path}}" method="get">
+      <input type="hidden" name="q" value="{{.Q}}">
+      {{if .Sort}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
+      <label>From<input type="date" name="from"></label>
+      <label>Until<input type="date" name="to"></label>
+      <button class="btn small primary">Apply</button>
+    </form>
+  </div>
+  <div id="pop-sort" popover class="menu narrow">
+    <div class="menu-items">
+      {{if .Text}}<a href="{{listURL .Path .Q "" 1}}" class="{{if eq .Sort ""}}on{{end}}"><span>Best match</span></a>{{end}}
+      <a href="{{listURL .Path .Q "-created" 1}}" class="{{if or (eq .Sort "-created") (and (eq .Sort "") (not .Text))}}on{{end}}"><span>Newest first</span></a>
+      <a href="{{listURL .Path .Q "created" 1}}" class="{{if eq .Sort "created"}}on{{end}}"><span>Oldest first</span></a>
+      <a href="{{listURL .Path .Q "-added" 1}}" class="{{if eq .Sort "-added"}}on{{end}}"><span>Recently added</span></a>
+      <a href="{{listURL .Path .Q "title" 1}}" class="{{if eq .Sort "title"}}on{{end}}"><span>Title A–Z</span></a>
+    </div>
+  </div>
+
+{{end}}
+  {{if .Err}}<div class="alert">That search didn't work: {{.Err}}</div>{{end}}
+
+  <form method="post" action="/bulk" id="bulkform">
+    <input type="hidden" name="return" value="{{listURL .Path .Q .Sort .Page}}">
+    <div id="results">{{template "results" .}}</div>
+
+    <div class="bulkbar" id="bulkbar" hidden>
+      <span class="bulk-count" id="selcount">0 selected</span>
+      <span class="bulk-sep"></span>
+      <button class="bbtn" type="button" popovertarget="pop-btag"><svg class="i"><use href="#i-tag"/></svg>Tag</button>
+      <button class="bbtn" type="button" popovertarget="pop-bsender"><svg class="i"><use href="#i-user"/></svg>Sender</button>
+      <button class="bbtn" type="button" popovertarget="pop-btype"><svg class="i"><use href="#i-folder"/></svg>Type</button>
+      {{if .Inbox}}<button class="bbtn strong" name="op" value="reviewed"><svg class="i"><use href="#i-check"/></svg>Done</button>{{end}}
+      <button class="bbtn" type="button" popovertarget="pop-bmore" aria-label="More"><svg class="i"><use href="#i-more"/></svg></button>
+      <button class="bbtn" type="button" data-clear-selection aria-label="Clear selection"><svg class="i"><use href="#i-x"/></svg></button>
+    </div>
+    <div id="pop-btag" popover class="menu form-menu">
+      <label class="field"><span>Tag</span><input name="tag" list="dl-tags" placeholder="Pick or type a new tag" autocomplete="off"></label>
+      <div class="row"><button class="btn primary small" name="op" value="tag_add">Add tag</button><button class="btn small" name="op" value="tag_remove">Remove tag</button></div>
+    </div>
+    <div id="pop-bsender" popover class="menu form-menu">
+      <label class="field"><span>Sender</span><input name="sender" list="dl-senders" placeholder="Leave empty to remove" autocomplete="off"></label>
+      <div class="row"><button class="btn primary small" name="op" value="sender">Set sender</button></div>
+    </div>
+    <div id="pop-btype" popover class="menu form-menu">
+      <label class="field"><span>Type</span><input name="type" list="dl-types" placeholder="Leave empty to remove" autocomplete="off"></label>
+      <div class="row"><button class="btn primary small" name="op" value="type">Set type</button></div>
+    </div>
+    <div id="pop-bmore" popover class="menu narrow">
+      <div class="menu-items">
+        {{if not .Inbox}}<button class="menu-btn" name="op" value="reviewed"><svg class="i"><use href="#i-check"/></svg>Mark as reviewed</button>{{end}}
+        <button class="menu-btn" name="op" value="inbox"><svg class="i"><use href="#i-inbox"/></svg>Move to inbox</button>
+        <button class="menu-btn" name="op" value="reprocess"><svg class="i"><use href="#i-refresh"/></svg>Read text again</button>
+        <hr>
+        <button class="menu-btn danger" name="op" value="delete" data-confirm="The selected documents and their files will be removed from your archive." data-confirm-title="Delete documents?"><svg class="i"><use href="#i-trash"/></svg>Delete</button>
+      </div>
+    </div>
+  </form>
+{{end}}
+
+{{define "datalists"}}
+<datalist id="dl-tags">{{range .Tags}}<option value="{{.Name}}">{{end}}</datalist>
+<datalist id="dl-senders">{{range .Corrs}}<option value="{{.Name}}">{{end}}</datalist>
+<datalist id="dl-types">{{range .Types}}<option value="{{.Name}}">{{end}}</datalist>
+{{end}}
+
+{{define "results"}}
+{{if .Res.Documents}}
+<div class="resmeta">
+  <label class="selall"><input type="checkbox" id="selectall" aria-label="Select all"><span>{{plural .Res.Total "document" "documents"}}</span></label>
+</div>
+<div class="docs" id="docs">
+  {{range .Res.Documents}}
+  <article class="doc{{if .Inbox}} is-new{{end}}">
+    <label class="doc-check" title="Select"><input type="checkbox" name="ids" value="{{.ID}}"></label>
+    <a class="doc-link" href="/documents/{{.ID}}">
+      <div class="doc-thumb"><img src="/api/documents/{{.ID}}/thumb?v={{.Modified.Unix}}" loading="lazy" alt="">{{if .Inbox}}<span class="newbadge">New</span>{{end}}</div>
+      <div class="doc-body">
+        <h3 class="doc-title">{{.Title}}</h3>
+        <div class="doc-meta">{{with .Correspondent}}<span>{{.Name}}</span>{{else}}{{with .SuggestedSender}}<span class="suggested-meta" title="Suggested, not confirmed yet">{{.}}?</span>{{end}}{{end}}<span>{{niceDate .Created}}</span>{{with .DocumentType}}<span>{{.Name}}</span>{{end}}</div>
+        {{with .Snippet}}<p class="doc-snippet">{{safe .}}</p>{{end}}
+        {{if .Tags}}<div class="doc-tags">{{range .Tags}}<span class="tag" style="{{tagStyle .Color}}">{{.Name}}</span>{{end}}</div>{{end}}
+      </div>
+    </a>
+  </article>
+  {{end}}
+</div>
+{{if gt .Pages 1}}
+<nav class="pager">
+  {{if gt .Page 1}}<a class="btn" href="{{listURL .Path .Q .Sort (dec .Page)}}">Previous</a>{{else}}<span></span>{{end}}
+  <span class="muted">Page {{.Page}} of {{.Pages}}</span>
+  {{if lt .Page .Pages}}<a class="btn" href="{{listURL .Path .Q .Sort (inc .Page)}}">Next</a>{{else}}<span></span>{{end}}
+</nav>
+{{end}}
+{{else if .Err}}
+{{else if .Q}}
+<div class="empty">
+  <div class="empty-icon"><svg class="i"><use href="#i-search"/></svg></div>
+  <h2>No matches</h2>
+  <p>Try fewer words or remove a filter.</p>
+  <a class="btn" href="{{listURL .Path "" "" 1}}">Clear search</a>
+</div>
+{{else if .Inbox}}
+<div class="empty">
+  <div class="empty-icon ok"><svg class="i"><use href="#i-check"/></svg></div>
+  <h2>All caught up</h2>
+  <p>New documents show up here so you can check how they were sorted.</p>
+</div>
+{{else}}
+<div class="empty big">
+  <div class="empty-icon"><svg class="i"><use href="#i-upload"/></svg></div>
+  <h2>Add your first documents</h2>
+  <p>Drag PDFs, scans or photos onto this window, or</p>
+  <button class="btn primary" type="button" data-upload>Choose files</button>
+  {{if .ConsumeDir}}<p class="hint">You can also save scans into <code>{{.ConsumeDir}}</code> and they show up here on their own.</p>{{end}}
+  <ol class="steps">
+    <li><b>Add</b> paperfull reads the text, even from photos and scans.</li>
+    <li><b>Check</b> new documents wait in your inbox with a suggested sender, type and tags.</li>
+    <li><b>Find</b> search any word in any document, years later.</li>
+  </ol>
+</div>
+{{end}}
+{{end}}

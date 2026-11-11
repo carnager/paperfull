@@ -1,0 +1,55 @@
+{{define "activity"}}{{template "top" .Base}}
+<main class="page narrow"{{if .Busy}} data-autorefresh{{end}}>
+  <div class="pagehead">
+    <div>
+      <h1>Activity</h1>
+      <p class="sub">Documents being read and sorted since paperfull started.{{if .ConsumeDir}} New scans are picked up from <code>{{.ConsumeDir}}</code>.{{end}}</p>
+    </div>
+  </div>
+  {{if .Tasks}}
+  <ul class="tasklist">
+    {{range .Tasks}}
+    <li class="task st-{{.Status}}">
+      <span class="status-dot"></span>
+      <div class="task-main">
+        <span class="task-name">{{.File}}</span>
+        <span class="task-sub">{{statusText .Status}} · {{ago .Queued}}{{if eq .Status "failed"}} · {{.Error}}{{end}}</span>
+      </div>
+      {{if .DocumentID}}<a class="btn small" href="/documents/{{.DocumentID}}">Open</a>{{end}}
+    </li>
+    {{end}}
+  </ul>
+  {{else}}
+  <div class="empty">
+    <div class="empty-icon"><svg class="i"><use href="#i-activity"/></svg></div>
+    <h2>Nothing happening</h2>
+    <p>When you add documents, you can follow along here.</p>
+  </div>
+  {{end}}
+</main>
+{{template "bottom"}}{{end}}
+
+{{define "login"}}{{template "head" .Base}}
+<body class="center">
+<main class="login">
+  <div class="login-brand">{{template "logo"}}<span>paperfull</span></div>
+  <form method="post" action="/login" class="card">
+    <h1>Welcome back</h1>
+    {{if .Err}}<div class="alert">That password didn't work. Try again.</div>{{end}}
+    <label class="field"><span>Password</span><input type="password" name="token" autofocus required autocomplete="current-password"></label>
+    <button class="btn primary block">Sign in</button>
+  </form>
+</main>
+</body>
+</html>{{end}}
+
+{{define "error"}}{{template "top" .Base}}
+<main class="page narrow">
+  <div class="empty">
+    <div class="empty-icon warn"><svg class="i"><use href="#i-x"/></svg></div>
+    <h2>Something went wrong</h2>
+    <p>{{.Err}}</p>
+    <a class="btn" href="/">Back to documents</a>
+  </div>
+</main>
+{{template "bottom"}}{{end}}

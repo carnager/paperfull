@@ -1,0 +1,98 @@
+{{define "document"}}{{template "top" .Base}}
+<form method="post" action="/documents/{{.Doc.ID}}" class="docpage" id="docform" data-guard>
+  <header class="dochead">
+    <a class="iconbtn" href="{{.Back}}" data-back title="Back (Esc)" aria-label="Back"><svg class="i"><use href="#i-left"/></svg></a>
+    <div class="dochead-title">
+      {{if .Doc.Inbox}}<span class="pill new">Inbox{{if gt .InboxCount 1}} · {{.InboxCount}} left{{end}}</span>{{else}}<span class="pill done"><svg class="i"><use href="#i-check"/></svg>Reviewed</span>{{end}}
+      <span class="filename" title="Original file name">{{.Doc.OriginalName}}</span>
+    </div>
+    <div class="dochead-actions">
+      <a class="btn ghost" href="/api/documents/{{.Doc.ID}}/{{if .Doc.ArchivePath}}archive{{else}}original{{end}}"><svg class="i"><use href="#i-download"/></svg><span class="hide-sm">Download</span></a>
+      <button class="iconbtn" type="button" popovertarget="pop-docmore" title="More" aria-label="More actions"><svg class="i"><use href="#i-more"/></svg></button>
+    </div>
+  </header>
+
+  <div class="docbody">
+    <div class="viewer">
+      {{if eq .Preview "pdf"}}<iframe src="/api/documents/{{.Doc.ID}}/preview#view=FitH" title="Document preview"></iframe>
+      {{else if eq .Preview "image"}}<div class="imgview"><img src="/api/documents/{{.Doc.ID}}/preview" alt="Document"></div>
+      {{else if eq .Preview "office"}}<iframe src="/documents/{{.Doc.ID}}/view" title="Document preview"></iframe>
+      {{else}}<pre class="textview">{{.Doc.Content}}</pre>{{end}}
+    </div>
+
+    <aside class="panel">
+      <div class="panel-scroll">
+        {{if .AI}}<button class="aibtn" type="button" data-ai="/api/documents/{{.Doc.ID}}/ai"><svg class="i"><use href="#i-sparkle"/></svg><span>Fill in with AI</span></button>{{end}}
+        <label class="field">
+          <span>Title</span>
+          <input name="title" value="{{.Doc.Title}}" required class="title-input" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>From{{if and (not .Doc.Correspondent) .Doc.SuggestedSender}}<em class="suggested" title="Suggested by AI. Becomes a new sender when you save.">new · suggested</em>{{end}}</span>
+          <input name="sender" list="dl-senders" value="{{with .Doc.Correspondent}}{{.Name}}{{else}}{{.Doc.SuggestedSender}}{{end}}" placeholder="Who sent it? e.g. your bank" autocomplete="off">
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>Type{{if and (not .Doc.DocumentType) .Doc.SuggestedType}}<em class="suggested" title="Suggested by AI. Becomes a new type when you save.">new · suggested</em>{{end}}</span>
+            <input name="type" list="dl-types" value="{{with .Doc.DocumentType}}{{.Name}}{{else}}{{.Doc.SuggestedType}}{{end}}" placeholder="Invoice, letter…" autocomplete="off">
+          </label>
+          <label class="field date">
+            <span>Date</span>
+            <input type="date" name="created" value="{{.Doc.Created}}" required>
+          </label>
+        </div>
+        <div class="field">
+          <span>Tags</span>
+          <div class="tagfield" data-tagfield>
+            <input name="tags" value="{{.TagNames}}" placeholder="Add tags, separated by commas" autocomplete="off">
+          </div>
+        </div>
+        <label class="field">
+          <span>Notes</span>
+          <textarea name="notes" rows="2" placeholder="Anything you want to remember" data-autosize>{{.Doc.Notes}}</textarea>
+        </label>
+
+        <details class="disclosure">
+          <summary>Details</summary>
+          <dl class="facts">
+            <dt>Pages</dt><dd>{{.Doc.Pages}}</dd>
+            <dt>Added</dt><dd>{{ago .Doc.Added}}</dd>
+            <dt>Changed</dt><dd>{{ago .Doc.Modified}}</dd>
+            <dt>Original file</dt><dd>{{.Doc.OriginalName}}</dd>
+            <dt>Stored as</dt><dd><code>{{.Doc.Path}}</code></dd>
+          </dl>
+        </details>
+        <details class="disclosure">
+          <summary>Recognized text</summary>
+          <pre class="ocrtext">{{.Doc.Content}}</pre>
+        </details>
+      </div>
+
+      <div class="panel-foot">
+        {{if .Doc.Inbox}}
+          <button class="btn primary grow" name="op" value="done" data-primary><svg class="i"><use href="#i-check"/></svg>{{if .NextInbox}}Done, next{{else}}Done{{end}}</button>
+          <button class="btn" name="op" value="save" data-save>Save</button>
+        {{else}}
+          <button class="btn primary grow" name="op" value="save" data-primary data-save>Save changes</button>
+        {{end}}
+        <span class="kbd-hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd></span>
+      </div>
+    </aside>
+  </div>
+</form>
+
+<div id="pop-docmore" popover class="menu narrow">
+  <div class="menu-items">
+    {{if not .Doc.Inbox}}<button class="menu-btn" form="docform" name="op" value="to_inbox"><svg class="i"><use href="#i-inbox"/></svg>Move back to inbox</button>{{end}}
+    <a class="menu-btn" href="/api/documents/{{.Doc.ID}}/original"><svg class="i"><use href="#i-download"/></svg>Download original file</a>
+    <form method="post" action="/documents/{{.Doc.ID}}/reprocess"><button class="menu-btn"><svg class="i"><use href="#i-refresh"/></svg>Read text again</button></form>
+    <hr>
+    <form method="post" action="/documents/{{.Doc.ID}}/delete">
+      <input type="hidden" name="return" value="{{.Back}}">
+      <button class="menu-btn danger" data-confirm-title="Delete this document?" data-confirm="“{{.Doc.Title}}” and its files will be removed from your archive."><svg class="i"><use href="#i-trash"/></svg>Delete</button>
+    </form>
+  </div>
+</div>
+{{template "datalists" .Entities}}
+<script type="application/json" id="tagdata">{{.AllTags}}</script>
+{{template "bottom"}}{{end}}
