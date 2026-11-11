@@ -1,188 +1,229 @@
 # paperfull
 
-A small, self-hosted document archive in the spirit of paperless-ngx: one Go
-binary and one SQLite file. No Docker, Redis, Celery or Postgres.
+A document archive for your own machine. You throw scans, PDFs and office
+files at it, it reads them, files them, and lets you find them again.
 
-- **OCR** with tesseract. PDFs that already contain text are not touched;
-  scans and photos get a searchable PDF. Sideways and upside-down pages are
-  turned upright.
-- **Auto-sorting.** Correspondent, document type and tags are set by your
-  rules (any / all / literal / regex) or learned from documents you have
-  already reviewed. The date is read from the document text.
-- **Search** that finds words inside words ("rechnung" → "Stromrechnung"),
-  ignores accents, and has filters such as `tag:steuer from:stadtwerke after:2023`.
-- **Tidy files on disk.** Originals are stored as
-  `Correspondent/Year/Date Title.pdf` and renamed when you change metadata.
-  You can browse the archive without paperfull.
-- **Folder watching and a REST API** for getting documents in.
+I liked the idea of paperless-ngx but not running Docker, Redis, Celery,
+Postgres and a pile of Python workers to keep a few hundred letters in
+order. paperfull is one Go binary and one SQLite file. It idles at around
+20 MB of RAM.
+
+## What it does
+
+- Reads scans and photos with tesseract and stores a searchable PDF next to
+  the original. PDFs that already have text are left alone. Pages that went
+  through the scanner sideways or upside down get turned the right way.
+- Guesses sender, type, tags and date for each new document. It learns from
+  the documents you've already sorted, and you can add your own rules
+  ("anything mentioning 'Stadtwerke' is from Stadtwerke").
+- Optionally asks a local language model (Ollama) who sent a letter and what
+  it is about. Useful for senders it hasn't seen before. Nothing leaves your
+  machine.
+- Search that finds words inside words: `rechnung` matches
+  "Stromrechnung". Filters like `from:stadtwerke tag:steuer after:2023`.
+- Keeps the files on disk in plain folders, `Sender/Year/Date Title.pdf`,
+  renamed when you change something. You can browse your archive without
+  paperfull running, and nothing is locked into a database.
+- Watches a folder for new scans, and has a REST API for scripts.
+
+New documents land in an inbox. You open one, fix whatever it got wrong,
+press Done and get the next one. Every document you sort makes the guesses
+for the next ones better.
 
 ## Requirements
 
-`tesseract` with your language data (plus `osd` for rotation), and `poppler`
-(`pdftotext`, `pdftoppm`, `pdfinfo`, `pdfunite`).
+- Go 1.23 or newer to build it
+- tesseract, with the language data you need (and `osd` for rotated pages)
+- poppler (`pdftotext`, `pdftoppm`, `pdfinfo`, `pdfunite`)
+
+Optional:
+
+- LibreOffice, for real PDF previews of Word/Excel/PowerPoint files
+- Ollama, for AI suggestions
 
 ```sh
 # Arch
 pacman -S tesseract tesseract-data-deu tesseract-data-eng tesseract-data-osd poppler
-# Debian/Ubuntu
+
+# Debian / Ubuntu
 apt install tesseract-ocr tesseract-ocr-deu tesseract-ocr-osd poppler-utils
+
+# macOS
+brew install tesseract tesseract-lang poppler
 ```
 
-## Build and run
+## Running it
 
 ```sh
 go build -o paperfull ./cmd/paperfull
 ./paperfull -data ~/.local/share/paperfull -consume ~/Scans/inbox
-# open http://127.0.0.1:8484
 ```
 
-Every flag has an environment variable (`./paperfull -h`). The ones you'll
-most likely want:
+Then open http://127.0.0.1:8484. Drop a file onto the page or into
+`~/Scans/inbox` and it shows up in the inbox a few seconds later.
+`samples/` has a scanned invoice and a Word letter to try it with.
 
-| flag | env | default |
+By default it only listens on localhost and has no login. If you want to
+reach it from other machines, set a password:
+
+```sh
+./paperfull -listen 0.0.0.0:8484 -token 'something long'
+```
+
+`contrib/paperfull.service` is a systemd user unit if you want it running
+in the background.
+
+## Options
+
+Every option can also be set as an environment variable. `paperfull -h`
+lists all of them; these are the ones you're likely to touch:
+
+| Option | Variable | Default |
 |---|---|---|
 | `-data` | `PAPERFULL_DATA` | `./data` |
 | `-consume` | `PAPERFULL_CONSUME` | off |
 | `-listen` | `PAPERFULL_LISTEN` | `127.0.0.1:8484` |
-| `-token` | `PAPERFULL_TOKEN` | none (no login) |
+| `-token` | `PAPERFULL_TOKEN` | no login |
 | `-lang` | `PAPERFULL_OCR_LANG` | `deu+eng` |
+| `-date-order` | `PAPERFULL_DATE_ORDER` | `DMY` (so 03/04 is 3 April) |
 | `-filename-format` | `PAPERFULL_FILENAME_FORMAT` | `{correspondent}/{year}/{created} {title}` |
-| `-date-order` | `PAPERFULL_DATE_ORDER` | `DMY` |
-| `-ai` | `PAPERFULL_AI_URL` | off, e.g. `http://127.0.0.1:11434` |
+| `-ai` | `PAPERFULL_AI_URL` | off |
 | `-ai-model` | `PAPERFULL_AI_MODEL` | `qwen2.5:7b` |
-| `-libreoffice` | `PAPERFULL_LIBREOFFICE` | `auto` (use if installed), `off`, or path to `soffice` |
+| `-libreoffice` | `PAPERFULL_LIBREOFFICE` | `auto` |
 
-`contrib/paperfull.service` is a systemd user unit.
+The filename format understands `{correspondent}`, `{type}`, `{title}`,
+`{created}`, `{year}`, `{month}`, `{day}`, `{id}`, `{tags}` and
+`{original_name}`.
 
-## Supported files
+## File types
 
-| Files | How |
+| Files | What happens |
 |---|---|
-| PDF | Text layer used when present, otherwise OCR plus a searchable copy |
-| JPEG, PNG, TIFF (multi-page), WebP, GIF, BMP | OCR, stored with a searchable PDF |
-| Word, Excel, PowerPoint (.docx, .xlsx, .pptx) and LibreOffice (.odt, .ods, .odp) | Text read directly from the file. If LibreOffice is installed, also turned into a PDF with the original layout (preview, thumbnail, printing); otherwise shown as a simplified formatted preview |
-| Plain text | As is |
+| PDF | Uses the text if there is any, otherwise OCR and a searchable copy |
+| JPEG, PNG, TIFF (also multi-page), WebP, GIF, BMP | OCR, stored with a searchable PDF |
+| .docx, .xlsx, .pptx, .odt, .ods, .odp | Text is read straight from the file. With LibreOffice installed you also get a PDF that looks like the original; without it, a simpler preview with headings, tables and images |
+| .txt | Stored as it is |
 
-LibreOffice is optional and found automatically, also inside the macOS app
-(`-libreoffice off` to skip it, or give the path to `soffice`). Converting
-takes a second or two per file. Old binary formats (.doc, .xls) and HEIC
-photos aren't supported. To get PDFs for office files added earlier, select
-them and choose **Read text again**.
+Old `.doc`/`.xls` files and iPhone HEIC photos aren't supported yet.
 
-## Getting documents in
+LibreOffice is picked up automatically if it's installed, including the
+macOS app. Use `-libreoffice off` to skip it.
 
-**Consume folder.** Files dropped into the folder are picked up once they
-stop changing, then deleted after they were stored. Files that fail
-(unsupported, broken, duplicate) are moved to `.failed/` next to a `.err`
-note. Sub-folder names become tags, so scanning into `inbox/Steuer/2024/`
-tags the document `Steuer` and `2024`. Switch that off with
-`-consume-subdir-tags=false`.
+## The watched folder
 
-**API.**
+paperfull waits until a file stops changing, so a scanner that's still
+writing doesn't get interrupted. Once a file is stored it's removed from the
+folder. Files that can't be added (broken, unsupported, already in the
+archive) go to `.failed/` with a short note explaining why.
+
+Sub-folder names become tags. Scanning into `inbox/Steuer/` tags the
+document "Steuer". Turn that off with `-consume-subdir-tags=false`.
+
+## How sorting works
+
+Each sender, type and tag has a setting for when it's assigned on its own:
+
+- **Learn from my documents** (default). New documents get the labels of
+  the most similar documents you've already sorted. Your own name and
+  address are ignored, since they're on every letter.
+- **Text contains any / all of these words**, **this exact phrase**, or a
+  **regular expression**.
+- **Never**, if you only want to set it by hand.
+
+Rules always win. Learned guesses are only trusted when several similar
+documents agree.
+
+## AI suggestions
+
+If you run [Ollama](https://ollama.com), paperfull can ask a model to read
+each new document:
 
 ```sh
-# multipart, with optional metadata (ids or names; unknown names are created)
+ollama pull qwen2.5:7b
+./paperfull -ai http://127.0.0.1:11434
+```
+
+It suggests sender, type, title and date. A sender you already have is
+filled in directly, even if the letter spells it differently ("Stadtwerke
+Musterstadt GmbH" and "Stadtwerke Musterstadt" are the same). A new sender
+is only pre-filled and gets created when you press Done, so your list
+doesn't fill up with junk. Scanner file names like `scan_0042.pdf` get a
+proper title.
+
+With a 7B model on a mid-range GPU this takes about a second per document.
+If Ollama isn't running, documents are processed as usual without
+suggestions. Older documents have a "Fill in with AI" button.
+
+## Search
+
+| Query | Finds |
+|---|---|
+| `strom rechnung` | documents with both words, also inside longer words |
+| `"exact phrase"` | that phrase |
+| `gas OR strom` | either word |
+| `-mahnung` | everything without that word |
+| `title:vertrag` | only in titles |
+| `tag:steuer`, `-tag:paid`, `tag:none` | by tag |
+| `from:stadtwerke`, `from:none` | by sender |
+| `type:invoice` | by type |
+| `after:2023-05`, `before:2024`, `year:2022` | by document date |
+| `inbox:yes` | not reviewed yet |
+
+Names with spaces need quotes: `tag:"Steuer 2023"`. You rarely need to type
+any of this; the filter buttons above the results do it for you.
+
+## API
+
+Send `Authorization: Bearer <token>` if you've set a token.
+
+```sh
+# upload, optionally with metadata (ids or names; new names are created)
 curl -H "Authorization: Bearer $TOKEN" \
      -F document=@scan.pdf -F tags=Steuer,2024 -F correspondent=Finanzamt \
      http://127.0.0.1:8484/api/documents
 
-# raw body, wait until processed
+# same, as raw body, waiting until it's processed
 curl -H "Authorization: Bearer $TOKEN" --data-binary @scan.pdf \
      "http://127.0.0.1:8484/api/documents?filename=scan.pdf&wait=true"
+
+# search
+curl -H "Authorization: Bearer $TOKEN" \
+     "http://127.0.0.1:8484/api/documents?q=from:stadtwerke+year:2025"
 ```
 
-**Web UI.** Drag and drop files anywhere on the page.
-
-## Sorting
-
-New documents land in the **inbox** with whatever the classifier suggested.
-Open one, fix what's wrong and press **Save & done** to go to the next one.
-Every reviewed document teaches the classifier.
-
-Each tag, correspondent and document type has a matching mode:
-
-- `auto` (default): learned. A new document gets the labels of the most
-  similar reviewed documents, so one example is enough to start. Tags need
-  two examples. Once the sender is known, type and tags are taken from that
-  sender's earlier documents.
-- `any` / `all`: whole words from the match text (use `"quotes"` for phrases).
-- `literal`: exact text. `regex`: a regular expression.
-- `none`: never assigned automatically.
-
-Rules win over learning for correspondent and type. Tags from both are merged.
-
-## AI suggestions (optional)
-
-With a local [Ollama](https://ollama.com), paperfull reads each new document
-and suggests sender, type, title and date. It's off by default and nothing
-leaves your machine.
-
-```sh
-ollama pull qwen2.5:7b
-./paperfull -ai http://127.0.0.1:11434            # -ai-model to pick another model
-```
-
-- Your rules and what paperfull learned from reviewed documents still win.
-  The model fills the gaps, which mostly means senders it has never seen.
-- A suggested sender that already exists is matched loosely
-  ("Stadtwerke Musterstadt GmbH" → "Stadtwerke Musterstadt").
-- A new sender or type is only pre-filled, marked "new · suggested", and
-  created when you save the document. Nothing gets created behind your back.
-- Junk file names like `scan_0042.pdf` get a real title.
-- On any document page, **Fill in with AI** asks again for documents that
-  were added before.
-- If Ollama is down, documents are processed as usual without suggestions.
-
-A 7B model on a mid-range GPU takes about a second per document.
-
-## Search syntax
-
-| query | meaning |
+| Endpoint | |
 |---|---|
-| `strom rechnung` | all words, also inside longer words |
-| `"exact phrase"` | phrase |
-| `gas OR strom`, `-mahnung` | either / exclude |
-| `title:vertrag` | title only |
-| `tag:steuer`, `-tag:paid`, `tag:none` | tags |
-| `from:stadtwerke`, `correspondent:none` | correspondent |
-| `type:invoice` | document type |
-| `after:2023-05`, `before:2024`, `year:2022` | document date (`after` is inclusive) |
-| `inbox:yes` | not yet reviewed |
-| `id:42` | one document |
+| `GET /api/documents?q=&sort=&limit=&offset=` | search |
+| `POST /api/documents` | upload, returns a task |
+| `GET`, `PATCH`, `DELETE /api/documents/{id}` | read, change, delete |
+| `POST /api/documents/bulk` | change or delete several at once |
+| `GET /api/documents/{id}/original`, `/archive`, `/thumb` | files |
+| `POST /api/documents/{id}/reprocess` | read the document again |
+| `POST /api/documents/{id}/ai` | ask the AI, without saving |
+| `GET /api/tasks`, `/api/tasks/{id}` | processing status |
+| `GET /api/events` | live updates (server-sent events) |
+| `GET`, `POST /api/tags`, `/api/correspondents`, `/api/document_types` | list, create |
+| `GET`, `PATCH`, `DELETE /api/{kind}/{id}` | one tag, sender or type |
 
-Names with spaces need quotes: `tag:"Steuer 2023"`.
+`PATCH` takes `title`, `created` (YYYY-MM-DD), `notes`, `inbox`,
+`correspondent` and `document_type` (id, name or `null`), and `tags`,
+`add_tags`, `remove_tags`.
 
-## API overview
-
-All endpoints take `Authorization: Bearer <token>` when a token is set.
-
-| | |
-|---|---|
-| `GET /api/documents?q=&sort=&limit=&offset=` | search (sort: `created`, `-created`, `added`, `-added`, `title`) |
-| `POST /api/documents` | upload (see above); returns a task |
-| `GET/PATCH/DELETE /api/documents/{id}` | read, change, delete |
-| `POST /api/documents/bulk` | `{"documents":[1,2], "add_tags":["x"], "correspondent":"y", "inbox":false}` or `{"documents":[…], "delete":true}` |
-| `GET /api/documents/{id}/original` · `/archive` · `/thumb` | files |
-| `GET /api/documents/{id}/suggestions` | what the classifier would assign |
-| `POST /api/documents/{id}/reprocess` | redo OCR |
-| `GET /api/tasks`, `GET /api/tasks/{id}` | processing status |
-| `GET/POST /api/tags` · `/api/correspondents` · `/api/document_types` | list, create |
-| `GET/PATCH/DELETE /api/{kind}/{id}` | read, change, delete one |
-| `GET /api/stats`, `POST /api/retrain` | |
-
-PATCH fields: `title`, `created` (YYYY-MM-DD), `notes`, `inbox`,
-`correspondent` and `document_type` (id, name or `null`), `tags` (replaces
-all), `add_tags`, `remove_tags`.
-
-## Data layout
+## Where your data is
 
 ```
 data/
-  paperfull.db      metadata, text, search index
-  originals/        your files, in the filename format
-  archive/          searchable PDFs made by OCR, same layout
+  paperfull.db      sorting, text and search index
+  originals/        your files, as uploaded
+  archive/          searchable PDFs paperfull made
   thumbs/
 ```
 
-Back up the whole directory. After restoring only the database, run
-`paperfull reindex` to rebuild the search index.
+To back up, copy the whole folder. If you ever only restore the database,
+run `paperfull reindex` to rebuild the search index.
+
+## Things it doesn't do (yet)
+
+- Multiple users. There's one login.
+- Email import.
+- Password-protected PDFs end up in `.failed/`.
