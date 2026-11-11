@@ -55,10 +55,10 @@
 </section>
 <div id="toasts" aria-live="polite"></div>
 <dialog id="unlock" class="modal small">
-  <form method="dialog" id="unlock-form">
+  <form method="dialog" id="unlock-form" data-bwignore data-1p-ignore data-lpignore="true" data-form-type="other" autocomplete="off">
     <h2>This PDF is locked</h2>
     <p><b id="unlock-file"></b> is protected with a password. Enter it to add the document. paperfull keeps an unlocked copy, so you won't be asked again.</p>
-    <label class="field"><span>Password</span><input type="password" id="unlock-password" autocomplete="off" required></label>
+    <label class="field"><span>Password</span><input type="password" id="unlock-password" autocomplete="off" required data-bwignore data-1p-ignore data-lpignore="true" data-form-type="other"></label>
     <p class="formerror" id="unlock-error" hidden></p>
     <div class="modal-actions">
       <button class="btn ghost danger left" type="button" id="unlock-discard">Discard</button>

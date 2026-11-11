@@ -61,7 +61,8 @@ go build -o paperfull ./cmd/paperfull
 
 Then open http://127.0.0.1:8484. Drop a file onto the page or into
 `~/Scans/inbox` and it shows up in the inbox a few seconds later.
-`samples/` has a scanned invoice and a Word letter to try it with.
+`samples/` has a scanned invoice, a Word letter and a password-protected
+bank statement (the password is `geheim`) to try it with.
 
 By default it only listens on localhost and has no login. If you want to
 reach it from other machines, set a password:
